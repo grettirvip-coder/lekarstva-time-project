@@ -1,0 +1,345 @@
+openapi: 3.0.3
+info:
+  title: ЛекарстваTime API
+  description: API для мобильного приложения контроля приема лекарств. Позволяет управлять карточками препаратов и отмечать факты приема.
+  version: 1.0.0
+servers:
+  - url: https://lekarstva-time.ru
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /medications:
+    get:
+      summary: Получить список всех лекарств пользователя
+      description: Возвращает список всех активных карточек препаратов текущего пользователя.
+      operationId: getMedications
+      tags:
+        - Medications
+      responses:
+        '200':
+          description: Список лекарств успешно получен
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Medication'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      summary: Создание карточки приема лекарства
+      description: |
+        Создает новую карточку препарата. 
+        Если препарат есть в справочнике, передается pharmacy_ref_id. 
+        Иначе поля заполняются вручную (pharmacy_ref_id может быть null).
+        Поле current_quantity на бэкенде изначально приравнивается к initial_quantity.
+      operationId: createMedication
+      tags:
+        - Medications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicationCreate'
+      responses:
+        '201':
+          description: Карточка препарата успешно создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Medication'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /medications/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Уникальный идентификатор карточки лекарства (UUID)
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: Редактировать карточку лекарства
+      description: Позволяет изменить параметры приема или обновить начальное количество (упаковку). Изменение остатка (current_quantity) происходит только через отметки приемов.
+      operationId: updateMedication
+      tags:
+        - Medications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicationUpdate'
+      responses:
+        '200':
+          description: Карточка препарата успешно обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Medication'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      summary: Удалить карточку лекарства
+      description: Удаляет карточку лекарства или переводит ее в статус архивной (привязанные приемы сохраняются в истории).
+      operationId: deleteMedication
+      tags:
+        - Medications
+      responses:
+        '204':
+          description: Карточка успешно удалена, тело ответа отсутствует
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /intakes:
+    get:
+      summary: Получить расписание приемов лекарств
+      description: Возвращает список запланированных приемов. Рекомендуется фильтровать по дате для отображения расписания на конкретный день.
+      operationId: getIntakes
+      tags:
+        - Intakes
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Фильтр по дате запланированного приема (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+          example: "2023-10-25"
+      responses:
+        '200':
+          description: Список приемов успешно получен
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IntakeRecord'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /intakes/{id}:
+    patch:
+      summary: Отметить прием лекарства или отредактировать отметку
+      description: |
+        Обновляет статус записи о приеме (is_taken). 
+        При изменении статуса система автоматически пересчитывает 
+        current_quantity в связанной карточке Medication, учитывая предыдущее состояние.
+      operationId: updateIntake
+      tags:
+        - Intakes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Уникальный идентификатор записи о приеме (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntakeUpdate'
+      responses:
+        '200':
+          description: Статус приема успешно обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntakeRecord'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Передайте JWT токен в заголовке Authorization в формате "Bearer <token>"
+
+  responses:
+    BadRequestError:
+      description: Неверный формат входных данных
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnauthorizedError:
+      description: Пользователь не авторизован (отсутствует или невалиден токен)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFoundError:
+      description: Запрашиваемый ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: "Неверный формат данных или нарушение ограничений целостности"
+
+    MedicationCreate:
+      type: object
+      required:
+        - name
+        - dosage
+        - frequency
+        - time
+        - initial_quantity
+      properties:
+        pharmacy_ref_id:
+          type: string
+          nullable: true
+          description: ID препарата во внешнем справочнике аптек (null, если добавлен вручную)
+          example: "PHARM-12345"
+        name:
+          type: string
+          maxLength: 100
+          description: Название лекарственного препарата
+          example: "Парацетамол"
+        dosage:
+          type: string
+          maxLength: 50
+          description: Разовая дозировка
+          example: "1 таблетка"
+        frequency:
+          type: string
+          maxLength: 50
+          description: Периодичность приема
+          example: "Пн, Ср, Пт"
+        time:
+          type: string
+          pattern: '^(\d|2[0-3]):[0-5]\d:[0-5]\d$'
+          description: Время приема препарата в формате HH:mm:ss
+          example: "08:00:00"
+        initial_quantity:
+          type: integer
+          minimum: 1
+          description: Начальное количество препарата в упаковке
+          example: 30
+
+    MedicationUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          example: "Парацетамол"
+        dosage:
+          type: string
+          maxLength: 50
+          example: "2 таблетки"
+        frequency:
+          type: string
+          maxLength: 50
+          example: "Ежедневно"
+        time:
+          type: string
+          pattern: '^(\d|2[0-3]):[0-5]\d:[0-5]\d$'
+          example: "14:00:00"
+        initial_quantity:
+          type: integer
+          minimum: 1
+          description: Используется при покупке новой упаковки лекарства
+          example: 60
+
+    Medication:
+      type: object
+      required:
+        - medication_id
+        - name
+        - dosage
+        - frequency
+        - time
+        - initial_quantity
+        - current_quantity
+      properties:
+        medication_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        pharmacy_ref_id:
+          type: string
+          nullable: true
+          example: "PHARM-12345"
+        name:
+          type: string
+          example: "Парацетамол"
+        dosage:
+          type: string
+          example: "1 таблетка"
+        frequency:
+          type: string
+          example: "Пн, Ср, Пт"
+        time:
+          type: string
+          pattern: '^(\d|2[0-3]):[0-5]\d:[0-5]\d$'
+          example: "08:00:00"
+        initial_quantity:
+          type: integer
+          example: 30
+        current_quantity:
+          type: integer
+          example: 30
+
+    IntakeUpdate:
+      type: object
+      required:
+        - is_taken
+      properties:
+        is_taken:
+          type: boolean
+          description: Факт приема (true - принято, false - отмена отметки)
+          example: true
+        taken_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Фактическое время отметки о приеме
+          example: "2023-10-25T08:05:00Z"
+
+    IntakeRecord:
+      type: object
+      properties:
+        record_id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        medication_id:
+          type: string
+          format: uuid
