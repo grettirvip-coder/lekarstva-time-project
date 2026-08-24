@@ -2,7 +2,7 @@
 
 **Желаемая должность:** Системный аналитик / Младший системный аналитик (Junior+ / Junior System Analyst)  
 **Формат работы:** Удаленно / Гибрид / Тюмень  
-**Контакты:** +7 (912) 9990722 | repetrov@bk.ru | Telegram: [@grettir72]  
+**Контакты:** repetrov@bk.ru | Telegram: [@grettir72]  
 **Портфолио проекта:** [https://github.com/твой_логин/lekarstva-time-project](https://github.com/твой_логин/lekarstva-time-project)
 
 ---
